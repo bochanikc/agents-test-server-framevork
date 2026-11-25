@@ -1,0 +1,100 @@
+{
+  "framework_commit": "c959d307e4f764670d760b37c814686ab8cbdfaa",
+  "basis": "synthetic, offline; no service request",
+  "checks": [
+    {
+      "function": "tests/e2e/test_collision.py::_f04_oracle",
+      "inputs": {
+        "up_a": {
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_bytes": 1,
+          "url": "/files/example.bin",
+          "status": 201
+        },
+        "up_b": {
+          "source_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_bytes": 1,
+          "url": null,
+          "status": 500
+        },
+        "read_before": {
+          "status": 200,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "reads_a": [
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "reads_b": [
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "matches": [
+          {
+            "size": 1
+          }
+        ]
+      },
+      "by_policy": {
+        "unknown": [
+          "pass",
+          "unknown: B отклонён (4xx), A сохранён"
+        ],
+        "reject": [
+          "pass",
+          "reject: B отклонён (4xx), A сохранён"
+        ]
+      },
+      "expected": "500 must fail"
+    },
+    {
+      "function": "tools/collect.py::collect",
+      "inputs": {
+        "profile": {
+          "required": {
+            "cases": [
+              "H01"
+            ]
+          }
+        },
+        "cards": {
+          "e2e/H01.json": {
+            "case_id": "H01",
+            "outcome": "passed"
+          },
+          "security/SEC02.json": {
+            "case_id": "SEC02",
+            "status": "observation",
+            "outcome": "failed"
+          }
+        }
+      },
+      "decision": "GO",
+      "case_status": {
+        "H01": "pass",
+        "SEC02": "observation"
+      },
+      "expected": "failed outcome must remain visible and prevent GO"
+    }
+  ]
+}
