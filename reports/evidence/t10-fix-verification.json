@@ -1,7 +1,7 @@
 {
   "audit_source": "reports/evidence/readiness-audit.json (историческое доказательство, не изменялось)",
   "before_commit": "af8518b (main до правок; аудит выполнен на c959d30)",
-  "after_commit": "локальный коммит ветки fix/t10-false-pass-go (SHA передаёт координатор)",
+  "after_commit": "c27862fc96a05e365057b66ccfe7cb748ff78939",
   "basis": "synthetic, offline; общий стенд не использовался",
   "examples": [
     {
