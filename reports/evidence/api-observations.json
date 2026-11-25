@@ -1,0 +1,70 @@
+{
+  "p13-limit-1048577": {
+    "status": 413,
+    "content_type": "text/plain; charset=utf-8",
+    "response_text": "Maximum request body size 1048576 exceeded."
+  },
+  "p18-no-file": {
+    "status": 400,
+    "content_type": "application/json; charset=utf-8"
+  },
+  "p19-broken-multipart": {
+    "status": 400,
+    "content_type": "application/json; charset=utf-8",
+    "parser_message_present": true
+  },
+  "p20-missing": {
+    "status": 404,
+    "content_type": "application/json; charset=utf-8"
+  },
+  "p09-ext-read-txt": {
+    "status": 200,
+    "type": "text/plain",
+    "disposition": "attachment",
+    "x_content_type_options": null,
+    "sha256": "6523ebcc845762cacfb09c413d0187b83ef7c4310646a2beeb71589d79b11d74",
+    "dot_separated_suffix_count": 1,
+    "final_extension": ".txt"
+  },
+  "p09-ext-read-pdf": {
+    "status": 200,
+    "type": "application/pdf",
+    "disposition": "attachment",
+    "x_content_type_options": null,
+    "sha256": "6523ebcc845762cacfb09c413d0187b83ef7c4310646a2beeb71589d79b11d74",
+    "dot_separated_suffix_count": 1,
+    "final_extension": ".pdf"
+  },
+  "p16-multidot-read": {
+    "status": 200,
+    "type": "application/pdf",
+    "disposition": "attachment",
+    "x_content_type_options": null,
+    "sha256": "05f3acfc0fdadde78b86cb64097e1fb0d601a23e7aaf0b0af32bfe04daa4dddf",
+    "dot_separated_suffix_count": 3,
+    "final_extension": ".pdf"
+  },
+  "p17-unicode-upload": {
+    "input_fragment": "отчёт ",
+    "receipt_fragment": "______",
+    "download_filename_fragment": "______",
+    "sha256_matches_upload": true
+  },
+  "metadata_fields": {
+    "upload_receipt": [
+      "content_type",
+      "fields",
+      "name",
+      "path",
+      "size",
+      "url"
+    ],
+    "catalog": [
+      "content_type",
+      "fields",
+      "name",
+      "path",
+      "size"
+    ]
+  }
+}
