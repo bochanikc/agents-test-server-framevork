@@ -1,0 +1,104 @@
+name: fileqa
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install from lock
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock
+          python -m pip install -e ".[dev]"
+      - name: Harness selftest
+        run: python -m pytest tests/harness tests/capacity/test_selftest.py --junitxml=artifacts/selftest/junit.xml -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest
+          path: artifacts/selftest/
+
+  e2e:
+    needs: selftest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Требует стенда. URL и учётные данные приходят из секретов репозитория.
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install -e ".[dev]"
+      - name: E2E
+        env:
+          FILEQA_PROFILE: profiles/live.json
+          # Живой origin — только пример; staging-адрес приходит из секрета.
+          FILEQA_ORIGIN: ${{ secrets.STAGING_ORIGIN }}
+          FILEQA_RUN_ID: ${{ github.run_id }}
+          FILEQA_ARTIFACTS: artifacts/${{ github.run_id }}
+        run: |
+          test -n "$FILEQA_ORIGIN"
+          python -m pytest tests/e2e -m e2e --junitxml=artifacts/${{ github.run_id }}/e2e/junit.xml -q > "$RUNNER_TEMP/fileqa-live.log" 2>&1
+
+  capacity:
+    needs: selftest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Требует одноразового экземпляра с настройкой квот (reset/quotas).
+    environment: disposable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.lock && python -m pip install -e ".[dev]"
+      - name: Capacity
+        env:
+          FILEQA_ORIGIN: ${{ secrets.STAGING_ORIGIN }}
+          FILEQA_PROFILE: profiles/disposable.example.json
+          FILEQA_RUN_ID: ${{ github.run_id }}
+          FILEQA_ARTIFACTS: artifacts/${{ github.run_id }}
+        run: |
+          test -n "$FILEQA_ORIGIN"
+          python -m pytest tests/capacity -m capacity --junitxml=artifacts/${{ github.run_id }}/capacity/junit.xml -q > "$RUNNER_TEMP/fileqa-live.log" 2>&1
+
+  security:
+    needs: selftest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.lock && python -m pip install -e ".[dev]"
+      - name: Security
+        env:
+          FILEQA_ORIGIN: ${{ secrets.STAGING_ORIGIN }}
+          FILEQA_PROFILE: profiles/security.example.json
+          FILEQA_RUN_ID: ${{ github.run_id }}
+          FILEQA_ARTIFACTS: artifacts/${{ github.run_id }}
+        run: |
+          test -n "$FILEQA_ORIGIN"
+          python -m pytest tests/security -m security --junitxml=artifacts/${{ github.run_id }}/security/junit.xml -q > "$RUNNER_TEMP/fileqa-live.log" 2>&1
+
+  # Нагрузка — отдельная задача измерений на машине с k6 (не в этом пуле).
+  # Пример автономного запуска — в docs/performance.md.

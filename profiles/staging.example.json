@@ -1,0 +1,41 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "staging.example",
+  "description": "Пример обычного E2E-стенда. Подставьте реальный origin. Источник каждой настройки — в sources.",
+  "origin": "https://files.example.com",
+  "limits": {
+    "single_file_bytes": 10485760,
+    "object_count": 1000,
+    "logical_bytes": 1073741824,
+    "scope": "tenant"
+  },
+  "policy": {
+    "collision": "versioned",
+    "names": "as-sent",
+    "delete": true
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": ["reset", "quotas"],
+  "slo": {
+    "p95_read_ms": 200,
+    "ref": "owner-provided"
+  },
+  "required": {
+    "cases": ["H01", "L01", "F01", "F02", "F03", "F04", "F05", "F06", "N01", "N02", "F07"]
+  },
+  "budget": {
+    "objects": 100,
+    "bytes": 67108864,
+    "seconds": 1800
+  },
+  "sources": {
+    "origin": "agreement",
+    "limits": "agreement",
+    "policy": "agreement",
+    "slo": "agreement"
+  }
+}

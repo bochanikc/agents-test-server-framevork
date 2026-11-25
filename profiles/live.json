@@ -1,0 +1,41 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "live",
+  "description": "Пример профиля чёрного ящика. Подставьте реальный origin или переопределите его переменной FILEQA_ORIGIN. Значения лимитов и политики — стартовые примеры, замените по факту.",
+  "origin": "http://files.example.com",
+  "limits": {
+    "single_file_bytes": 1048576,
+    "object_count": null,
+    "logical_bytes": null,
+    "scope": "unknown"
+  },
+  "policy": {
+    "collision": "unknown",
+    "names": "as-sent",
+    "delete": false
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": [],
+  "slo": null,
+  "required": {
+    "cases": ["H01", "L01", "F01", "F02", "F03", "N01", "N02", "F04", "F06", "F07"]
+  },
+  "budget": {
+    "objects": 20,
+    "bytes": 8388608,
+    "seconds": 600
+  },
+  "sources": {
+    "origin": "assumed",
+    "limits.single_file_bytes": "assumed",
+    "limits.object_count": "assumed",
+    "limits.logical_bytes": "assumed",
+    "policy.collision": "assumed",
+    "policy.names": "assumed",
+    "policy.delete": "assumed"
+  }
+}

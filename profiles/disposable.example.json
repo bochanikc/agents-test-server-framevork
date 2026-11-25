@@ -1,0 +1,37 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "disposable.example",
+  "description": "Пример одноразового экземпляра с малой логической квотой для C01–C03. Требует reset/quotas; изоляция namespace настраивается на стенде.",
+  "origin": "https://files.example.com",
+  "limits": {
+    "single_file_bytes": 1048576,
+    "object_count": 8,
+    "logical_bytes": 32768,
+    "scope": "tenant"
+  },
+  "policy": {
+    "collision": "replace",
+    "names": "as-sent",
+    "delete": true
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": ["reset", "quotas", "namespace"],
+  "slo": null,
+  "required": {
+    "cases": ["C01", "C02", "C03"]
+  },
+  "budget": {
+    "objects": 16,
+    "bytes": 65536,
+    "seconds": 600
+  },
+  "sources": {
+    "origin": "agreement",
+    "limits": "agreement",
+    "policy": "agreement"
+  }
+}

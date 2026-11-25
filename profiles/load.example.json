@@ -1,0 +1,43 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "load.example",
+  "description": "Бюджет нагрузочного прогона. Не договорный SLO — стартовый профиль измерений.",
+  "origin": "http://files.example.com",
+  "limits": {
+    "single_file_bytes": 1048576,
+    "object_count": null,
+    "logical_bytes": null,
+    "scope": "unknown"
+  },
+  "policy": {
+    "collision": "unknown",
+    "names": "normalized",
+    "delete": false
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": [],
+  "slo": null,
+  "load": {
+    "read_smoke_vus": [1, 2],
+    "read_smoke_iterations": 8,
+    "mixed_operations": 100,
+    "mixed_max_vus": 2,
+    "mixed_post_bytes": 65536,
+    "mixed_max_records": 10
+  },
+  "required": {
+    "cases": []
+  },
+  "budget": {
+    "objects": 12,
+    "bytes": 8388608,
+    "seconds": 300
+  },
+  "sources": {
+    "origin": "agreement"
+  }
+}

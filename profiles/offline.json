@@ -1,0 +1,37 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "offline",
+  "description": "Автономная самопроверка инструментов на синтетическом HTTP-дублёре. Сеть не используется.",
+  "origin": "http://127.0.0.1:0",
+  "limits": {
+    "single_file_bytes": null,
+    "object_count": null,
+    "logical_bytes": null,
+    "scope": "unknown"
+  },
+  "policy": {
+    "collision": "replace",
+    "names": "as-sent",
+    "delete": false
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": ["synthetic-double"],
+  "slo": null,
+  "required": {
+    "cases": []
+  },
+  "budget": {
+    "objects": 5,
+    "bytes": 1048576,
+    "seconds": 60
+  },
+  "sources": {
+    "origin": "assumed",
+    "policy.collision": "assumed",
+    "policy.names": "assumed"
+  }
+}

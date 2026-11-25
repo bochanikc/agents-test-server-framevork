@@ -1,0 +1,43 @@
+{
+  "schema": "fileqa-profile",
+  "version": 1,
+  "name": "security.example",
+  "description": "Ожидания защитных свойств. Различай наблюдение и обещание окружения; неизвестное остаётся открытым.",
+  "origin": "http://files.example.com",
+  "limits": {
+    "single_file_bytes": 1048576,
+    "object_count": null,
+    "logical_bytes": null,
+    "scope": "unknown"
+  },
+  "policy": {
+    "collision": "unknown",
+    "names": "normalized",
+    "delete": false
+  },
+  "upload": {
+    "field": "file",
+    "path": "/files"
+  },
+  "capabilities": [],
+  "security": {
+    "transport": "http",
+    "auth": "none-observed",
+    "public_listing": "unknown",
+    "disclosure_policy": "unknown"
+  },
+  "required": {
+    "cases": []
+  },
+  "budget": {
+    "objects": 6,
+    "bytes": 1048576,
+    "seconds": 300
+  },
+  "sources": {
+    "transport": "observation",
+    "auth": "observation",
+    "public_listing": "assumed",
+    "disclosure_policy": "assumed"
+  }
+}

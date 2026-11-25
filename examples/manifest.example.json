@@ -1,0 +1,33 @@
+{
+  "schema": "fileqa-manifest",
+  "version": 1,
+  "run_id": "20261125T000000Z-example",
+  "utc": "2026-11-25T00:00:00+00:00",
+  "build": "unknown",
+  "profile": "live",
+  "origin": "http://files.example.com",
+  "quota": {
+    "single_file_bytes": 1048576,
+    "object_count": null,
+    "logical_bytes": null,
+    "scope": "unknown"
+  },
+  "slo": {
+    "ref": null
+  },
+  "tools": {
+    "python": "3.13.5",
+    "fileqa": "0.1.0",
+    "k6": "2.4.0"
+  },
+  "objects": [
+    {
+      "name_sent": "qa-example-a1b2c3d4e5f6.bin",
+      "name_saved": "qa-example-a1b2c3d4e5f6.bin",
+      "url": "/files/qa-example-a1b2c3d4e5f6.bin",
+      "bytes": 262,
+      "sha256": "a019739031c9d1216d0011406a69a2efcd3e9f8ddbe1ef7f8c1097bfe2c59ca6",
+      "run": "20261125T000000Z-example"
+    }
+  ]
+}

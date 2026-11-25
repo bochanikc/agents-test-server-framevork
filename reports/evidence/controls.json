@@ -1,0 +1,45 @@
+{
+  "p01-control-upload": {
+    "status": 201,
+    "utc": "2026-11-25T07:13:18.543Z",
+    "sent_lens": [
+      124
+    ],
+    "sent_sha": [
+      "0f2197dd2edc71f98c4e560477dab52655e28b9d11206455e689100a80d0bff8"
+    ]
+  },
+  "p01-control-download": {
+    "status": 200,
+    "utc": "2026-11-25T07:13:19.930Z",
+    "body_len": 124,
+    "body_sha256": "0f2197dd2edc71f98c4e560477dab52655e28b9d11206455e689100a80d0bff8"
+  },
+  "p13-limit-1048576": {
+    "status": 201,
+    "sent_lens": [
+      1048576
+    ]
+  },
+  "p13-limit-1048577": {
+    "status": 413,
+    "sent_lens": [
+      1048577
+    ]
+  },
+  "p14-two-parts-600k": {
+    "status": 201,
+    "sent_lens": [
+      614400,
+      614400
+    ]
+  },
+  "p22-list-full": {
+    "status": 200,
+    "bytes": 14722599,
+    "elapsed_s": 44.834,
+    "json_ok": true,
+    "count": 79710,
+    "utc_end": "2026-11-25T07:15:49.390006+00:00"
+  }
+}
