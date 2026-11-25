@@ -147,3 +147,102 @@ def test_report_go_checks_profile_required(report_mod, tmp_path):
     report_mod.validate(tmp_path, _results(["H01"], tmp_path / "card.json"))
     with pytest.raises(ValueError, match="F07"):
         report_mod.validate(tmp_path, _results(["H01", "F07"], tmp_path / "card.json"))
+
+
+# --- Регрессии T10: фактический fail не должен превращаться в observation ---
+
+
+def _run_with(run: Path, cards: dict[str, dict], junit: dict[str, list[tuple[str, str]]] | None = None) -> Path:
+    for rel, card in cards.items():
+        p = run / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(card), encoding="utf-8")
+    for suite, outcomes in (junit or {}).items():
+        d = run / suite
+        d.mkdir(parents=True, exist_ok=True)
+        items = []
+        for case_id, outcome in outcomes:
+            body = ""
+            if outcome == "failed":
+                body = '<failure message="synthetic assert">boom</failure>'
+            elif outcome == "skipped":
+                body = '<skipped message="synthetic skip"/>'
+            items.append(
+                f'<testcase classname="tests.{suite}.test_synthetic" name="test_{case_id}">'
+                f'<properties><property name="case_id" value="{case_id}"/></properties>'
+                f"{body}</testcase>"
+            )
+        xml = (
+            f'<testsuites><testsuite name="{suite}" tests="{len(items)}">'
+            + "".join(items)
+            + "</testsuite></testsuites>"
+        )
+        (d / "junit.xml").write_text(xml, encoding="utf-8")
+    return run
+
+
+def test_audit_observation_with_failed_outcome_is_no_go(collect_mod, tmp_path):
+    # Минимальный пример readiness-audit.json.
+    card = _card("SEC02", "observation")
+    card["outcome"] = "failed"
+    run = _run_with(
+        tmp_path / "run",
+        {"e2e/H01.json": _card("H01", "pass"), "security/SEC02.json": card},
+    )
+    data = collect_mod.collect(run, profile=_profile("H01"))
+    assert data["decision"] == "NO-GO"
+    sec = next(c for c in data["cases"] if c["id"] == "SEC02")
+    assert sec["status"] == "fail"
+    assert sec["repro"] == (
+        "python3 -m pytest tests/security/test_delivery.py::test_attachment_headers_and_name -m security"
+    )
+    assert sec["evidence"] == ["security/SEC02.json"]
+
+
+def test_junit_failure_overrides_observation_card(collect_mod, tmp_path):
+    card = _card("SEC02", "observation")
+    run = _run_with(
+        tmp_path / "run",
+        {"e2e/H01.json": _card("H01", "pass"), "security/SEC02.json": card},
+        junit={"security": [("SEC02", "failed")]},
+    )
+    data = collect_mod.collect(run, profile=_profile("H01"))
+    assert data["decision"] == "NO-GO"
+    sec = next(c for c in data["cases"] if c["id"] == "SEC02")
+    assert sec["status"] == "fail"
+    assert sec["evidence"] == ["security/junit.xml"]
+
+
+def test_junit_failure_without_card_is_visible(collect_mod, tmp_path):
+    run = _run_with(
+        tmp_path / "run",
+        {"e2e/H01.json": _card("H01", "pass")},
+        junit={"security": [("SEC02", "failed")]},
+    )
+    data = collect_mod.collect(run, profile=_profile("H01"))
+    assert data["decision"] == "NO-GO"
+    sec = next(c for c in data["cases"] if c["id"] == "SEC02")
+    assert sec["status"] == "fail"
+    assert sec["evidence"] == ["security/junit.xml"]
+    assert "security" in sec["repro"]
+
+
+def test_junit_skip_for_required_is_hold(collect_mod, tmp_path):
+    run = _run_with(
+        tmp_path / "run",
+        {"e2e/H01.json": _card("H01", "pass")},
+        junit={"e2e": [("F07", "skipped")]},
+    )
+    data = collect_mod.collect(run, profile=_profile("H01", "F07"))
+    assert data["decision"] == "HOLD"
+    assert any(g.startswith("F07:") for g in data["gaps"])
+
+
+def test_junit_all_pass_with_required_passes_is_go(collect_mod, tmp_path):
+    run = _run_with(
+        tmp_path / "run",
+        {"e2e/H01.json": _card("H01", "pass")},
+        junit={"e2e": [("H01", "passed")]},
+    )
+    data = collect_mod.collect(run, profile=_profile("H01"))
+    assert data["decision"] == "GO"

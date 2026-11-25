@@ -1,0 +1,134 @@
+{
+  "audit_source": "reports/evidence/readiness-audit.json (историческое доказательство, не изменялось)",
+  "before_commit": "af8518b (main до правок; аудит выполнен на c959d30)",
+  "after_commit": "локальный коммит ветки fix/t10-false-pass-go (SHA передаёт координатор)",
+  "basis": "synthetic, offline; общий стенд не использовался",
+  "examples": [
+    {
+      "id": "F04-500",
+      "inputs": {
+        "up_a": {
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_bytes": 1,
+          "url": "/files/example.bin",
+          "status": 201
+        },
+        "up_b": {
+          "source_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_bytes": 1,
+          "url": null,
+          "status": 500
+        },
+        "read_before": {
+          "status": 200,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "reads_a": [
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "reads_b": [
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "status": 200,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "matches": [
+          {
+            "size": 1
+          }
+        ]
+      },
+      "before": {
+        "unknown": [
+          "pass",
+          "unknown: B отклонён (4xx), A сохранён"
+        ],
+        "reject": [
+          "pass",
+          "reject: B отклонён (4xx), A сохранён"
+        ]
+      },
+      "after": {
+        "unknown": [
+          "fail",
+          "B: серверная ошибка 500"
+        ],
+        "reject": [
+          "fail",
+          "B: серверная ошибка 500"
+        ]
+      },
+      "expected": "fail в обоих режимах: 500 — не допустимый отказ"
+    },
+    {
+      "id": "SEC02-observation-failed",
+      "inputs": {
+        "profile": {
+          "required": {
+            "cases": [
+              "H01"
+            ]
+          }
+        },
+        "cards": {
+          "e2e/H01.json": {
+            "case_id": "H01",
+            "outcome": "passed"
+          },
+          "security/SEC02.json": {
+            "case_id": "SEC02",
+            "status": "observation",
+            "outcome": "failed"
+          }
+        }
+      },
+      "before": {
+        "decision": "GO",
+        "cases": {
+          "H01": "pass",
+          "SEC02": "observation"
+        }
+      },
+      "after": {
+        "decision": "NO-GO",
+        "cases": {
+          "H01": "pass",
+          "SEC02": "fail"
+        }
+      },
+      "expected": "SEC02 остаётся fail, решение NO-GO"
+    }
+  ],
+  "regressions": {
+    "f04": "tests/harness/test_f04_oracle.py — 25 passed",
+    "collect": "tests/harness/test_collect.py — 15 passed",
+    "end_to_end": "tests/harness/test_collect_e2e.py — 1 passed",
+    "selftest": "make selftest — 79 passed",
+    "collected": "101 tests"
+  },
+  "commands": [
+    "python3 -m pytest tests/harness/test_f04_oracle.py tests/harness/test_collect.py tests/harness/test_collect_e2e.py -q",
+    "make selftest"
+  ],
+  "verification_utc": "2026-11-25",
+  "old_code_check": "Новые регрессии ожидают fail/NO-GO; на коде main те же входы дают pass/GO (поле before), поэтому новые проверки на старом коде падают."
+}

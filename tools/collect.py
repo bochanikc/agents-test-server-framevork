@@ -22,18 +22,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fileqa.config import load_profile, required_cases_of
-
-SUITES = {
-    "H": "e2e", "L": "e2e", "F": "e2e", "N": "e2e",
-    "C": "capacity",
-    "SEC": "security",
-}
 
 # case_id -> (pytest-путь к тесту, человеческий заголовок, серьёзность при fail).
 NODES = {
@@ -75,26 +70,88 @@ def required_cases(profile: dict | None = None, manifest: dict | None = None) ->
 
 
 def _status(card: dict) -> str:
-    """Статус карточки: pass / fail / observation / skip / incomplete."""
+    """Статус карточки: pass / fail / observation / skip / incomplete.
+
+    Фактический исход pytest (`outcome`) важнее предварительного `status`:
+    карточка может быть записана как observation до заключительного assert,
+    а тест затем упасть. Исторические карточки с противоречащими полями
+    (status=observation, outcome=failed) обязаны оставаться fail.
+    """
+    outcome = card.get("outcome")
+    if outcome == "failed" or card.get("incomplete") is True:
+        return "fail" if outcome == "failed" else "incomplete"
     if card.get("status") in ("pass", "fail", "observation", "skip", "incomplete"):
         return card["status"]
     if card.get("incomplete"):
         return "incomplete"
-    outcome = card.get("outcome")
     if outcome == "passed":
         return "pass"
-    if outcome == "failed":
-        return "fail"
     if outcome == "skipped":
         return "skip"
     return "observation"
 
 
+def _suite(case_id: str) -> str:
+    """Каталог и маркер pytest по ID: SEC → security, C → capacity, иначе e2e."""
+    if case_id.startswith("SEC"):
+        return "security"
+    if case_id.startswith("C"):
+        return "capacity"
+    return "e2e"
+
+
 def _repro(case_id: str, suite: str) -> str:
     node = NODES.get(case_id, (None, None, None))[0]
     if node:
-        return f"python3 -m pytest {node} -m {SUITES.get(case_id[0], 'e2e')}"
+        return f"python3 -m pytest {node} -m {_suite(case_id)}"
     return f"python3 -m pytest tests/{suite} -m {suite}"
+
+
+_REVERSE_NODES = {node: case_id for case_id, (node, _, _) in NODES.items()}
+
+
+def _junit_case_id(testcase: ET.Element) -> str | None:
+    """ID кейса из свойства `case_id` или из nodeid известного теста."""
+    for prop in testcase.iter("property"):
+        if prop.get("name") == "case_id" and prop.get("value"):
+            return prop.get("value")
+    classname = (testcase.get("classname") or "").replace(".", "/")
+    name = testcase.get("name") or ""
+    if not classname or not name:
+        return None
+    return _REVERSE_NODES.get(f"{classname}.py::{name}")
+
+
+def _junit_results(run_dir: Path) -> dict:
+    """Фактические исходы pytest из junit.xml всех трёх наборов."""
+    results: dict = {}
+    for suite in ("e2e", "capacity", "security"):
+        for path in sorted((run_dir / suite).glob("junit*.xml")):
+            try:
+                root = ET.parse(path).getroot()
+            except (ET.ParseError, OSError):
+                continue
+            for testcase in root.iter("testcase"):
+                case_id = _junit_case_id(testcase)
+                if not case_id:
+                    continue
+                failure = testcase.find("failure")
+                error = testcase.find("error")
+                skipped = testcase.find("skipped")
+                if failure is not None or error is not None:
+                    node = failure if failure is not None else error
+                    detail = (node.get("message") or node.text or "").strip().splitlines()
+                    outcome, message = "failed", (detail[0] if detail else "тест упал")
+                elif skipped is not None:
+                    outcome, message = "skipped", (skipped.get("message") or "тест пропущен")
+                else:
+                    outcome, message = "passed", ""
+                results[case_id] = {
+                    "outcome": outcome,
+                    "detail": message,
+                    "junit": str(path.relative_to(run_dir)),
+                }
+    return results
 
 
 def collect(run_dir: Path, profile: dict | None = None) -> dict:
@@ -117,6 +174,53 @@ def collect(run_dir: Path, profile: dict | None = None) -> dict:
         except (ValueError, OSError):
             manifest = {}
 
+    # Сверка карточек с фактическим исходом pytest. Это закрывает два случая:
+    # карточка записана до падения (observation) и падение до записи карточки.
+    junit = _junit_results(run_dir)
+    by_id: dict = {}
+    for card in cards:
+        case_id = card.get("case_id") or ""
+        if case_id:
+            by_id[case_id] = card
+
+    for case_id, actual in junit.items():
+        card = by_id.get(case_id)
+        if card is None:
+            card = {
+                "source": "junit",
+                "run_id": run_dir.name,
+                "case_id": case_id,
+                "status": {"failed": "fail", "skipped": "skip", "passed": "pass"}[
+                    actual["outcome"]
+                ],
+                "outcome": actual["outcome"],
+                "detail": actual["detail"],
+                "_evidence": actual["junit"],
+            }
+            cards.append(card)
+            by_id[case_id] = card
+            continue
+        if card.get("status") != actual["outcome"]:
+            card.setdefault("status_recorded", card.get("status"))
+        card["outcome"] = actual["outcome"]
+        # Фактический провал/пропуск важнее предварительного observation.
+        if actual["outcome"] == "failed":
+            card["status"] = "fail"
+            if actual["detail"] and not card.get("detail"):
+                card["detail"] = actual["detail"]
+        elif actual["outcome"] == "skipped" and card.get("status") != "fail":
+            card["status"] = "skip"
+        card["_evidence"] = actual["junit"]
+
+    # Одна карточка на кейс: при дублях приоритет у фактического fail.
+    unique: dict = {}
+    for card in cards:
+        case_id = card.get("case_id") or ""
+        prev = unique.get(case_id)
+        if prev is None or _status(card) == "fail":
+            unique[case_id] = card
+    cards = list(unique.values())
+
     cases, gaps, questions = [], [], []
     for card in cards:
         case_id = card.get("case_id") or ""
@@ -129,8 +233,16 @@ def collect(run_dir: Path, profile: dict | None = None) -> dict:
             continue
 
         node, title, severity = NODES.get(case_id, (None, case_id or "?", "Medium"))
-        suite = SUITES.get((case_id or "?")[0], "e2e")
+        suite = _suite(case_id)
         detail = card.get("detail") or card.get("reason") or ""
+        if card.get("_evidence"):
+            evidence = card["_evidence"]
+        elif (run_dir / suite / f"{case_id}.json").is_file():
+            evidence = f"{suite}/{case_id}.json"
+        elif (run_dir / suite / "junit.xml").is_file():
+            evidence = f"{suite}/junit.xml"
+        else:
+            evidence = f"{suite}/{case_id}.json"
 
         case = {
             "id": case_id,
@@ -140,8 +252,7 @@ def collect(run_dir: Path, profile: dict | None = None) -> dict:
             "expected": card.get("expected") or "Согласованный контракт профиля/coverage.md.",
             "actual": detail or card.get("actual") or ("Проверка прошла." if status == "pass" else "Проверка не прошла."),
             "repro": card.get("repro") or _repro(case_id, suite),
-            "evidence": [str(Path(card.get("_path", "")).relative_to(run_dir))
-                         if card.get("_path") else f"{suite}/{case_id}.json"],
+            "evidence": [evidence],
         }
         if status == "fail":
             case["severity"] = card.get("severity") or severity

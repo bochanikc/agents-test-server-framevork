@@ -14,79 +14,130 @@ from fileqa.digest import sha256
 from fileqa.fixtures import binary_payload, unique_name
 
 
+# Ожидаемый конфликт имени. Для локального дублёра и согласованного контракта
+# это 409; прочие 4xx (400, 404, 413) — не «ожидаемый отказ», а посторонняя
+# клиентская ошибка, и проверку они проваливают.
+CONFLICT_STATUSES = (409,)
+
+
+def _is_2xx(status) -> bool:
+    return isinstance(status, int) and 200 <= status < 300
+
+
+def _is_conflict(status) -> bool:
+    return isinstance(status, int) and status in CONFLICT_STATUSES
+
+
+def _transport_failed(up_b: dict) -> bool:
+    """Нет HTTP-ответа: статус None/0 либо явная транспортная ошибка."""
+    status = up_b.get("status")
+    return status in (None, 0)
+
+
+def _url_of(up: dict) -> str | None:
+    url = up.get("url")
+    return url if isinstance(url, str) and url.strip() else None
+
+
+def _reads_are(reads: list, status: int, sha: str) -> bool:
+    return bool(reads) and all(r.get("status") == status and r.get("sha256") == sha for r in reads)
+
+
+def _rejection_detail(up_b: dict) -> str:
+    status = up_b.get("status")
+    if _transport_failed(up_b):
+        err = up_b.get("error") or "нет ответа"
+        return f"B: транспортная ошибка ({err})"
+    if isinstance(status, int) and status >= 500:
+        return f"B: серверная ошибка {status}"
+    return f"B: посторонний отказ {status} (ожидался только конфликт имени 409)"
+
+
 def _f04_oracle(policy, up_a, up_b, read_before, reads_a, reads_b, matches):
-    """Возвращает (verdict, detail); verdict в {pass, fail}."""
+    """Возвращает (verdict, detail); verdict в {pass, fail}.
+
+    Допустимый отказ B — только согласованный конфликт имени (409).
+    HTTP 5xx, отсутствие ответа и посторонние 4xx проваливают проверку.
+    Принятый B обязан иметь собственный url в квитанции; ссылка A не
+    подставляется. Полученные байты сверяются с SHA-256 редакции B.
+    """
     sha_a = up_a["source_sha256"]
     sha_b = up_b["source_sha256"]
 
     # 1. A до изменения обязано читаться как A.
-    if read_before["status"] != 200 or read_before["sha256"] != sha_a:
+    if read_before.get("status") != 200 or read_before.get("sha256") != sha_a:
         return "fail", (
-            f"A не читается до изменения: status={read_before['status']} "
-            f"sha={read_before['sha256']}"
+            f"A не читается до изменения: status={read_before.get('status')} "
+            f"sha={read_before.get('sha256')}"
         )
 
     if not matches:
         return "fail", "своя запись не найдена в списке после операций"
 
-    b_accepted = 200 <= up_b["status"] < 300
+    status = up_b.get("status")
+    b_accepted = _is_2xx(status)
+    b_conflict = _is_conflict(status)
+    sizes = {m.get("size") for m in matches}
 
-    def _url_b_ok():
-        return all(r["status"] == 200 and r["sha256"] == sha_b for r in reads_b)
+    # 2. Отказ B допустим только как конфликт имени. Всё остальное — fail.
+    if not b_accepted and not b_conflict:
+        return "fail", _rejection_detail(up_b)
 
-    def _url_a_ok():
-        return all(r["status"] == 200 and r["sha256"] == sha_a for r in reads_a)
+    url_a = _url_of(up_a)
+    url_b = _url_of(up_b)
+
+    if b_accepted and not url_b:
+        return "fail", f"квитанция B принята ({status}), но не содержит пригодного url"
+
+    if not b_accepted:
+        # Конфликт: A обязана сохраниться, лишней записи быть не должно.
+        if len(matches) != 1 or sizes != {up_a["source_bytes"]}:
+            return "fail", (
+                "после конфликта B запись списка не равна одной редакции A: "
+                f"строк {len(matches)}, размеры {sorted(s for s in sizes if s is not None)}"
+            )
+        if not _reads_are(reads_a, 200, sha_a):
+            return "fail", "после конфликта B ссылка A не отдаёт байты A"
+        return "pass", f"{policy}: B отклонён конфликтом {status}, A сохранена"
 
     if policy == "reject":
-        if b_accepted:
-            return "fail", f"reject: ожидался отказ B (4xx), получено {up_b['status']}"
-        if any(m.get("size") != up_a["source_bytes"] for m in matches):
-            return "fail", "reject: запись списка не соответствует A"
-        if not _url_a_ok():
-            return "fail", "reject: A изменился после отклонённого B"
-        return "pass", "reject: B отклонён (4xx), A сохранён"
+        return "fail", f"reject: ожидался конфликт B (409), получено {status}"
 
     if policy == "versioned":
-        if not b_accepted:
-            return "fail", f"versioned: ожидалось принятие B, получено {up_b['status']}"
-        if not _url_b_ok():
+        if not url_a:
+            return "fail", "versioned: у квитанции A нет url"
+        if url_a == url_b:
+            return "fail", "versioned: A и B получили один url — редакции не различить"
+        if not _reads_are(reads_b, 200, sha_b):
             return "fail", "versioned: ссылка B не отдаёт байты B"
-        if not _url_a_ok():
+        if not _reads_are(reads_a, 200, sha_a):
             return "fail", "versioned: ссылка A не отдаёт байты A"
-        return "pass", "versioned: A → A, B → B"
+        if not {up_a["source_bytes"], up_b["source_bytes"]} <= sizes:
+            return "fail", "versioned: в списке нет обеих редакций"
+        return "pass", "versioned: A → A, B → B, обе редакции в списке"
 
     if policy == "replace":
-        if not b_accepted:
-            return "fail", f"replace: ожидалось принятие B, получено {up_b['status']}"
-        if any(m.get("size") != up_b["source_bytes"] for m in matches):
-            return "fail", "replace: запись списка не соответствует B"
-        if not _url_b_ok():
+        if not _reads_are(reads_b, 200, sha_b):
             return "fail", "replace: ссылка B не отдаёт байты B"
-        if up_a["url"] == up_b["url"]:
-            if not all(r["status"] == 200 and r["sha256"] == sha_b for r in reads_a):
-                return "fail", "replace: общая ссылка не отдаёт B после замены"
+        if up_b["source_bytes"] not in sizes:
+            return "fail", "replace: запись списка не соответствует B"
+        if url_a == url_b and not _reads_are(reads_a, 200, sha_b):
+            return "fail", "replace: общая ссылка не отдаёт B после замены"
         return "pass", "replace: имя указывает на B"
 
-    # unknown — распознаём доказанное расхождение квитанции и выдачи.
-    if b_accepted:
-        b_shas = {r["sha256"] for r in reads_b}
-        b_statuses = {r["status"] for r in reads_b}
-        if len(b_shas) > 1 or len(b_statuses) > 1:
-            return "fail", "unknown: ссылка B возвращает разные байты/статусы при повторных чтениях"
-        got = b_shas.pop()
-        st = b_statuses.pop()
-        if st != 200:
-            return "fail", f"unknown: квитанция обещает B, но ссылка B отвечает {st}"
-        if got != sha_b:
-            if got == sha_a:
-                return "fail", "unknown: квитанция обещает B, ссылка B возвращает A (устаревшая редакция)"
-            return "fail", f"unknown: квитанция обещает B, ссылка B возвращает иные байты (sha {got})"
-        return "pass", "unknown: ссылка B согласованно возвращает B (B/B/B)"
-
-    # B отклонён (4xx) — как reject: A обязан сохраниться.
-    if not _url_a_ok():
-        return "fail", "unknown: B отклонён, но A более не читается"
-    return "pass", "unknown: B отклонён (4xx), A сохранён"
+    # unknown — политика не названа; проверяем согласованность квитанции и выдачи.
+    b_shas = {r.get("sha256") for r in reads_b}
+    b_statuses = {r.get("status") for r in reads_b}
+    if len(b_shas) > 1 or len(b_statuses) > 1:
+        return "fail", "unknown: ссылка B возвращает разные байты/статусы при повторных чтениях"
+    if not _reads_are(reads_b, 200, sha_b):
+        got = b_shas.pop() if len(b_shas) == 1 else None
+        if got == sha_a:
+            return "fail", "unknown: квитанция обещает B, ссылка B возвращает A (устаревшая редакция)"
+        return "fail", f"unknown: квитанция обещает B, ссылка B возвращает иные байты (sha {got})"
+    if up_b["source_bytes"] not in sizes:
+        return "fail", "unknown: принятый B не отражён размером в списке"
+    return "pass", "unknown: ссылка B согласованно возвращает B (B/B/B)"
 
 
 @pytest.mark.e2e
@@ -115,11 +166,22 @@ def test_f04_collision(client, run_id, profile, record, record_upload):
             )
 
         read_before = client.download(up_a["url"])
-        up_b = client.upload(name, data_b)
+        try:
+            up_b = client.upload(name, data_b)
+        except Exception as exc:  # транспортная ошибка — это не допустимый отказ
+            up_b = {
+                "status": None,
+                "url": None,
+                "receipt": None,
+                "source_bytes": len(data_b),
+                "source_sha256": sha_b,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
         record_upload(up_b)
 
-        url_b = up_b.get("url") or up_a.get("url")
-        reads_b = [client.download(url_b) for _ in range(3)]
+        # Ссылку B не подставляем из квитанции A: принятый B обязан иметь свой url.
+        url_b = up_b.get("url")
+        reads_b = [client.download(url_b) for _ in range(3)] if url_b else []
         reads_a = [client.download(up_a["url"]) for _ in range(3)]
 
         lst = client.list_files()
